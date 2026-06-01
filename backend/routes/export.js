@@ -2,16 +2,12 @@ const express = require("express");
 const router = express.Router();
 const { exportReport } = require("../services/reportExporter");
 
-const MIME_TYPES = {
-  pdf:  "application/pdf",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-};
+const DOCX_MIME =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 router.post("/export", async function(req, res) {
   var prompt = req.body.prompt;   // Option A: raw user prompt
   var report = req.body.report;   // Option B: report JSON
-  var format = req.body.format || "pdf";
 
   if (!prompt && !report) {
     return res.status(400).json({ 
@@ -19,22 +15,18 @@ router.post("/export", async function(req, res) {
     });
   }
 
-  if (!MIME_TYPES[format]) {
-    return res.status(400).json({ error: "format must be pdf, docx, or pptx" });
-  }
-
   try {
-    console.log("[export] Generating " + format + " (Full Report: " + !!prompt + ")");
+    console.log("[export] Generating DOCX (Full Report: " + !!prompt + ")");
     var startTime = Date.now();
 
     // Pass either the prompt string or the report object
     var input = prompt || report;
-    var result = await exportReport(input, format);
+    var result = await exportReport(input);
 
     var elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log("[export] Done: " + result.filename + " (" + result.buffer.length + " bytes) in " + elapsed + "s");
 
-    res.setHeader("Content-Type", MIME_TYPES[format]);
+    res.setHeader("Content-Type", DOCX_MIME);
     res.setHeader("Content-Disposition", 'attachment; filename="' + encodeURIComponent(result.filename) + '"');
     res.send(result.buffer);
   } catch (error) {

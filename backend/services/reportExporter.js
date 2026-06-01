@@ -9,13 +9,10 @@ const BETAS = [
   "files-api-2025-04-14",
 ];
 
-const SKILL_MAP = {
-  pdf:  "pdf",
-  docx: "docx",
-  pptx: "pptx",
-};
+const EXPORT_FORMAT = "docx";
+const DOCX_SKILL_ID = "docx";
 
-function buildPromptBasedSystemPrompt(format) {
+function buildPromptBasedSystemPrompt() {
   return `You are an elite report designer who creates documents 
 that look like they were produced by a professional consulting firm 
 like McKinsey, BCG, or Goldman Sachs.
@@ -98,22 +95,12 @@ For ANY topic, your document should include:
 
 ## TECHNICAL RULES
 
-- Use reportlab for PDF generation
-- Create custom Flowable classes for visual elements:
-  - ProfileCard: entity name, category, 4 stat boxes, description, 
-    key strengths list, major institutions list
-  - MetricCard: label, value, trend arrow, note
-  - BarChart: horizontal bars with labels and values
-  - ComparisonTable: multi-column with ratings/scores
-  - InsightBlock: numbered heading + body with colored left bar
-  - CoverPage: full visual cover with stats strip
-  - SectionDivider: visual separator between sections
-
-- NEVER use Unicode subscript/superscript characters — use <sub> 
-  and <super> XML tags in Paragraph objects
-
-- For bar charts: draw actual colored rectangles, not text
-
+- Use python-docx for DOCX generation
+- Use Word styles, tables, shaded cells, and paragraph formatting for 
+  visual hierarchy (cover title, KPI tables, comparison grids, insight blocks)
+- Include page breaks between major sections where appropriate
+- For metrics: use bordered/shaded table cells or a 2x2 KPI grid
+- For comparisons: formatted tables with header row styling
 - Save to /mnt/user-data/outputs/ — CRITICAL
 
 - Target 6-12 pages for comprehensive topics. Never produce less 
@@ -129,7 +116,7 @@ For ANY topic, your document should include:
 - Page numbers: "Page X of Y"`;
 }
 
-function buildJsonBasedSystemPrompt(format, report) {
+function buildJsonBasedSystemPrompt(report) {
   const recipes = [
     `### RECIPE A — "Dark Intelligence" (like a classified briefing)
   - Background: near-black (#0e0e10) for header/cover area
@@ -231,7 +218,7 @@ function buildJsonBasedSystemPrompt(format, report) {
   const randomRecipe = recipes[Math.floor(Math.random() * recipes.length)];
 
   return `You are an elite report designer. You generate 
-${format.toUpperCase()} documents that look like they were designed 
+DOCX documents that look like they were designed 
 by a professional graphic design agency — not a template engine.
 
 ## THE MOST IMPORTANT RULE: DESIGN VARIETY
@@ -243,59 +230,54 @@ ${randomRecipe}
 ---
 ## RULES FOR ALL RECIPES
 
-1. You MUST create custom Flowable classes for visual elements 
-   (metric cards, bar charts, insight blocks). Never use plain 
+1. Use python-docx with tables, headings, and cell shading for visual 
+   elements (metric cards, data tables, insight blocks). Never use plain 
    text-only layouts.
 
 2. The cover/first page must have a distinct visual treatment — 
    it should look like a cover, not like page 1 of body text.
 
 3. The KPI strip must be prominent and visual — large numbers 
-   with labels, not buried in body text.
+   with labels in a formatted table or grid, not buried in body text.
 
-4. Bar charts must be drawn as actual colored rectangles with 
-   proportional widths — not described in text.
+4. Represent bar chart data as a formatted table with values and 
+   optional shaded cells to show relative magnitude.
 
-5. Every section must be visually separated (dividers, spacing, 
-   or background color changes).
+5. Every section must be visually separated (page breaks, headings, 
+   horizontal rules, or table spacing).
 
 6. Save output to /mnt/user-data/outputs/ — this is CRITICAL.
 
 7. If any section data is missing or empty, skip it gracefully.
 
-8. Use reportlab for PDF. Use python-docx for DOCX. Use python-pptx 
-   for PPTX.
-
-9. NEVER use Unicode subscript/superscript characters — they render 
-   as black boxes in reportlab. Use <sub> and <super> XML tags.
+8. Output must be a valid .docx file using python-docx only.
 
 ---
 ## REPORT DATA
 
 ${JSON.stringify(report, null, 2)}
 
-Generate the ${format.toUpperCase()} file now. Commit fully to your 
+Generate the DOCX file now. Commit fully to your 
 chosen design recipe. Make it look like a professional design agency 
 produced it, not a code generator.`;
 }
 
-async function exportReport(input, format) {
+async function exportReport(input) {
+  var format = EXPORT_FORMAT;
   var isPromptBased = typeof input === "string";
   
   var systemPrompt;
   var userMessage;
   
   if (isPromptBased) {
-    systemPrompt = buildPromptBasedSystemPrompt(format);
-    userMessage = input + "\n\nGenerate a comprehensive, multi-page " 
-      + format.toUpperCase() 
-      + " report on this topic. Include detailed profiles, data tables, "
+    systemPrompt = buildPromptBasedSystemPrompt();
+    userMessage = input + "\n\nGenerate a comprehensive, multi-page DOCX "
+      + "report on this topic. Include detailed profiles, data tables, "
       + "comparison metrics, trends analysis, and visual elements. "
       + "Make it at least 6 pages. Use real data from your knowledge.";
   } else {
-    systemPrompt = buildJsonBasedSystemPrompt(format, input);
-    userMessage = "Generate a " + format.toUpperCase() 
-      + " report from the data provided in the system prompt.";
+    systemPrompt = buildJsonBasedSystemPrompt(input);
+    userMessage = "Generate a DOCX report from the data provided in the system prompt.";
   }
   
   console.log("[export] Calling Claude API with streaming...");
@@ -306,7 +288,7 @@ async function exportReport(input, format) {
     system: systemPrompt,
     container: {
       skills: [
-        { type: "anthropic", skill_id: SKILL_MAP[format] || format, version: "latest" },
+        { type: "anthropic", skill_id: DOCX_SKILL_ID, version: "latest" },
       ],
     },
     messages: [
@@ -343,7 +325,7 @@ async function exportReport(input, format) {
       system: systemPrompt,
       container: {
         skills: [
-          { type: "anthropic", skill_id: SKILL_MAP[format] || format, version: "latest" },
+          { type: "anthropic", skill_id: DOCX_SKILL_ID, version: "latest" },
         ],
       },
       messages: [
@@ -389,7 +371,7 @@ async function exportReport(input, format) {
 
   return {
     buffer: buffer,
-    filename: metadata.filename || "report." + format,
+    filename: metadata.filename || "report.docx",
   };
 }
 
