@@ -12,6 +12,67 @@ const BETAS = [
 const EXPORT_FORMAT = "docx";
 const DOCX_SKILL_ID = "docx";
 
+const DOCX_LAYOUT_QUALITY_RULES = `
+## DOCX LAYOUT QUALITY — MANDATORY (HIGHEST PRIORITY)
+
+Layout quality overrides decorative flourishes. The file MUST open cleanly
+in Microsoft Word: balanced margins, readable tables, zero overlap.
+
+### Page setup
+- Use one consistent page size (US Letter or A4) for the whole document.
+- Margins: 1 inch (2.54 cm) on top, bottom, left, and right — set via
+  section.page_width, page_height, and all four margin properties.
+- Single-column body only. Do NOT use multi-column sections, text boxes,
+  or side-by-side floating frames that push content to one edge.
+
+### Prevent left-crush and empty right side
+- Body text uses the full width between margins (justify or left align).
+- Set paragraph_format.space_after = Pt(10) and line_spacing = 1.15
+  on body paragraphs.
+- Headings: space_before = Pt(18), space_after = Pt(12), full width.
+- Never leave long stretches of content in a narrow left strip while the
+  right half of the page is blank.
+
+### No overlapping or stacked elements
+- Do NOT use absolute positioning, floating shapes, or layered text boxes.
+- Do NOT place images, shapes, or tables on top of each other.
+- One block per vertical flow: heading → content → spacing → next block.
+- Add an empty paragraph (spacing) between tables, KPI blocks, and prose.
+
+### Tables (KPIs, charts-as-tables, comparisons)
+- Set table.alignment = WD_TABLE_ALIGNMENT.CENTER.
+- Set table.autofit = False and assign explicit column widths in EMU or
+  Inches so columns sum to ~6.5 inches (full text width on Letter).
+- Example: 4-column KPI table → each column ~1.6 inches.
+- cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER for KPI cells.
+- Enable word wrap in every cell; never truncate with fixed narrow cells.
+- Table width should be ~90–100% of printable width, not a small left block.
+- Prefer one clear table per data block instead of nested cramped tables.
+
+### Cover page
+- Title, subtitle, and date: CENTER alignment, vertically spaced.
+- Cover KPIs: one full-width table (equal column widths) centered on page,
+  not a vertical list hugging the left margin.
+
+### Section structure
+- Heading 1 for major sections, Heading 2 for subsections.
+- page_break() before Executive Summary and before each major section.
+- Insight blocks: full-width shaded table row OR indented block spanning
+  the full text area — never a narrow left-only column.
+
+### Fonts
+- Body: 11pt Calibri or Arial. Headings: 14–22pt bold.
+- Minimum 10pt for table text; avoid 8pt cramming.
+
+### Before saving — verify
+1. Margins balanced; content uses full text width.
+2. No overlapping objects in Print Preview.
+3. Tables are centered, columns evenly sized, all text readable.
+4. No page has content only in the left 40% of the page.
+
+If a design recipe conflicts with these rules, obey LAYOUT RULES first.
+`;
+
 function buildPromptBasedSystemPrompt() {
   return `You are an elite report designer who creates documents 
 that look like they were produced by a professional consulting firm 
@@ -106,6 +167,8 @@ For ANY topic, your document should include:
 - Target 6-12 pages for comprehensive topics. Never produce less 
   than 4 pages. Depth and detail are more important than brevity.
 
+${DOCX_LAYOUT_QUALITY_RULES}
+
 ## FORCEEQUALS BRANDING
 
 - Brand colors: Navy #1e2761, Blue #1d4ed8, Light blue #eff6ff, 
@@ -199,20 +262,16 @@ function buildJsonBasedSystemPrompt(report) {
   - Overall feel: declassified intelligence document`,
 
     `### RECIPE F — "Infographic Poster" (like a visual data story)
-  - First page: full infographic-style cover
-  - Large title text overlapping colored shapes
-  - KPI strip: huge numbers (48pt+) with small labels
-    Arranged in 2x2 grid, each in its own colored box
-  - Use color blocks aggressively — full-width colored bands 
-    between sections
-  - Bar charts drawn as actual colored rectangles (not tables)
-  - Progress bars for metrics (filled/unfilled rectangles)
-  - Circular indicators for percentages (simulated with shapes)
-  - Icon-like symbols before each section heading
-  - Minimal body text — let the visuals tell the story
+  - First page: full infographic-style cover (no overlapping shapes)
+  - Large centered title with full-width colored header table row
+  - KPI strip: 2x2 table grid with equal cell widths, large bold numbers
+  - Full-width colored section band tables between sections
+  - Bar chart data as full-width table with shaded cells for magnitude
+  - Icon-like symbols before each section heading (unicode only)
+  - Minimal body text — visuals via tables, not floating graphics
   - Bold color palette: navy, coral (#f96167), gold (#f9e795)
-  - Footer: thin colored band
-  - Overall feel: conference poster or annual report infographic`
+  - Footer: thin colored band in a full-width table row
+  - Overall feel: conference poster — must still obey layout quality rules`
   ];
 
   const randomRecipe = recipes[Math.floor(Math.random() * recipes.length)];
@@ -252,6 +311,8 @@ ${randomRecipe}
 
 8. Output must be a valid .docx file using python-docx only.
 
+${DOCX_LAYOUT_QUALITY_RULES}
+
 ---
 ## REPORT DATA
 
@@ -274,10 +335,14 @@ async function exportReport(input) {
     userMessage = input + "\n\nGenerate a comprehensive, multi-page DOCX "
       + "report on this topic. Include detailed profiles, data tables, "
       + "comparison metrics, trends analysis, and visual elements. "
-      + "Make it at least 6 pages. Use real data from your knowledge.";
+      + "Make it at least 6 pages. Use real data from your knowledge. "
+      + "CRITICAL: Use full page width, even margins, centered tables with "
+      + "explicit column widths — no left-crushed content, no overlapping elements.";
   } else {
     systemPrompt = buildJsonBasedSystemPrompt(input);
-    userMessage = "Generate a DOCX report from the data provided in the system prompt.";
+    userMessage = "Generate a DOCX report from the data provided in the system prompt. "
+      + "CRITICAL: Professional layout only — balanced margins, full-width tables, "
+      + "proper spacing between sections. No overlapping or left-congested pages.";
   }
   
   console.log("[export] Calling Claude API with streaming...");
@@ -331,7 +396,9 @@ async function exportReport(input) {
       messages: [
         { role: "user", content: userMessage },
         { role: "assistant", content: currentResponse.content },
-        { role: "user", content: "Continue. Complete the file generation and save the output." },
+        { role: "user", content: "Continue. Complete the DOCX and save to outputs. "
+          + "Fix any cramped-left layout, narrow tables, or overlap before saving. "
+          + "Re-check margins, table column widths, and section spacing." },
       ],
       tools: [
         { type: "code_execution_20250825", name: "code_execution" },
